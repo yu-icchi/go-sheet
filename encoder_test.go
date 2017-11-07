@@ -143,3 +143,7 @@ func BenchmarkNewEncoder(b *testing.B) {
 		}
 	}
 }
+
+// 100000	     14261 ns/op	    5120 B/op	     125 allocs/op
+// 200000	      9532 ns/op	    4288 B/op	      99 allocs/op
+// 200000	      8230 ns/op	    2272 B/op	      93 allocs/op

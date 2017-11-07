@@ -2,10 +2,9 @@ package sheet
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"strconv"
-	"time"
+	"strings"
 )
 
 type Decoder struct {
@@ -53,85 +52,99 @@ func (dec *Decoder) Decode(values [][]string, v interface{}) error {
 		if key == "" {
 			continue
 		}
+		keyIdx := strings.Index(key, ":")
+		var opt *option
+		if keyIdx > 0 && keyIdx+1 < len(key) {
+			// option
+			opt = newOption(key[keyIdx+1:])
+		}
+		if keyIdx > 0 {
+			key = key[:keyIdx]
+		}
 		value := rv.FieldByName(key)
-		dec.decode(value, row, column)
+		if value.IsValid() {
+			dec.decode(value, row, column, opt)
+		}
+		resetOption(opt)
 	}
 	return nil
 }
 
-func (dec *Decoder) decode(v reflect.Value, row, column int) error {
-	switch v.Interface().(type) {
-	case time.Time:
-		x := dec.getValue(row, column)
-		fmt.Println("====>", v, x)
-	default:
-		switch v.Kind() {
-		case reflect.Ptr:
-			// todo...nilの場合はどうするかな。。。
-			elem := reflect.New(v.Type().Elem())
-			if err := dec.decode(elem.Elem(), row, column); err != nil {
+func (dec *Decoder) decode(v reflect.Value, row, column int, opt *option) error {
+	switch v.Kind() {
+	case reflect.Ptr:
+		// todo...nilの場合はどうするかな。。。
+		elem := reflect.New(v.Type().Elem())
+		if err := dec.decode(elem.Elem(), row, column, opt); err != nil {
+			return err
+		}
+		v.Set(elem)
+	case reflect.Struct:
+		switch v.Type() {
+		case typeOfTime:
+			x := dec.getValue(row, column)
+			t, err := decodeDatetime(x, opt)
+			if err != nil {
 				return err
 			}
-			v.Set(elem)
-		case reflect.Struct:
+			v.Set(reflect.ValueOf(t))
+		default:
 			if err := dec.decodeStruct(v, row, column, 0); err != nil {
 				return err
 			}
-		case reflect.Array:
-			return errors.New("unsupported array")
-		case reflect.Slice:
-			elems := reflect.MakeSlice(v.Type(), 0, 1) // 最終的に蓄積するスライス
-			rv := reflect.MakeSlice(v.Type(), 1, 1).Index(0)
-			switch rv.Kind() {
-			case reflect.Ptr:
-				pType := reflect.New(rv.Type().Elem())
-				switch pType.Elem().Kind() {
-				case reflect.Struct:
-					rows := dec.targetRows(row, column)
-					for _, i := range rows {
-						elem := reflect.New(rv.Type().Elem())
-						if err := dec.decodeStruct(elem.Elem(), row, column, i); err != nil {
-							return err
-						}
-						elems = reflect.Append(elems, elem)
-					}
-				default:
-					for i := 0; i < len(dec.values); i++ {
-						x := dec.getValue(row+i, column)
-						elem := reflect.New(rv.Type().Elem())
-						if err := dec.set(elem.Elem(), x); err != nil {
-							return err
-						}
-						elems = reflect.Append(elems, elem)
-					}
-				}
+		}
+	case reflect.Array:
+		return errors.New("unsupported decode array")
+	case reflect.Slice:
+		elems := reflect.MakeSlice(v.Type(), 0, 1) // 最終的に蓄積するスライス
+		rv := reflect.MakeSlice(v.Type(), 1, 1).Index(0)
+		switch rv.Kind() {
+		case reflect.Ptr:
+			pType := reflect.New(rv.Type().Elem())
+			switch pType.Elem().Kind() {
 			case reflect.Struct:
 				rows := dec.targetRows(row, column)
-				fmt.Println("-->", rows)
 				for _, i := range rows {
-					elem := reflect.New(rv.Type()).Elem()
-					if err := dec.decodeStruct(elem, row, column, i); err != nil {
+					elem := reflect.New(rv.Type().Elem())
+					if err := dec.decodeStruct(elem.Elem(), row, column, i); err != nil {
 						return err
 					}
-					fmt.Println("-->", elem)
 					elems = reflect.Append(elems, elem)
 				}
 			default:
 				for i := 0; i < len(dec.values); i++ {
 					x := dec.getValue(row+i, column)
-					elem := reflect.New(rv.Type()).Elem()
-					if err := dec.set(elem, x); err != nil {
+					elem := reflect.New(rv.Type().Elem())
+					if err := dec.set(elem.Elem(), x, opt); err != nil {
 						return err
 					}
 					elems = reflect.Append(elems, elem)
 				}
 			}
-			v.Set(elems)
-		default:
-			x := dec.getValue(row, column)
-			if err := dec.set(v, x); err != nil {
-				return err
+		case reflect.Struct:
+			rows := dec.targetRows(row, column)
+			for _, i := range rows {
+				elem := reflect.New(rv.Type()).Elem()
+				if err := dec.decodeStruct(elem, row, column, i); err != nil {
+					return err
+				}
+				elems = reflect.Append(elems, elem)
 			}
+		default:
+			for i := 0; i < len(dec.values); i++ {
+				x := dec.getValue(row+i, column)
+				elem := reflect.New(rv.Type()).Elem()
+				if err := dec.set(elem, x, opt); err != nil {
+					return err
+				}
+				elems = reflect.Append(elems, elem)
+			}
+		}
+		v.Set(elems)
+	default:
+		x := dec.getValue(row, column)
+		if err := dec.set(v, x, opt); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -149,13 +162,23 @@ func (dec *Decoder) decodeStruct(v reflect.Value, row, column, idx int) error {
 		if key == "" {
 			break
 		}
+		keyIdx := strings.Index(key, ":")
+		var opt *option
+		if keyIdx > 0 && keyIdx+1 < len(key) {
+			// option
+			opt = newOption(key[keyIdx+1:])
+		}
+		if keyIdx > 0 {
+			key = key[:keyIdx]
+		}
 		elem := v.FieldByName(key)
 		if !elem.IsValid() {
 			continue
 		}
-		if err := dec.decode(elem, row+idx, column+i); err != nil {
+		if err := dec.decode(elem, row+idx, column+i, opt); err != nil {
 			return err
 		}
+		resetOption(opt)
 	}
 	return nil
 }
@@ -177,7 +200,7 @@ func (dec *Decoder) getValue(row, column int) string {
 	return ""
 }
 
-func (dec *Decoder) set(v reflect.Value, value string) error {
+func (dec *Decoder) set(v reflect.Value, value string, opt *option) error {
 	if value == "" {
 		return nil
 	}
@@ -191,6 +214,13 @@ func (dec *Decoder) set(v reflect.Value, value string) error {
 		}
 		v.SetBool(x)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if opt != nil && opt.isDatetime {
+			t, err := decodeDatetime(value, opt)
+			if err != nil {
+				return err
+			}
+			value = strconv.FormatInt(t.Unix(), 10)
+		}
 		x, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return err

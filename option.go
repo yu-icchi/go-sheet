@@ -3,6 +3,7 @@ package sheet
 import (
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -17,9 +18,20 @@ type option struct {
 	isDatetime bool
 }
 
-func genOption(tag string) *option {
+func (o *option) reset() {
+	o.title = ""
+	o.isDatetime = false
+}
+
+var optionPool = sync.Pool{
+	New: func() interface{} {
+		return &option{}
+	},
+}
+
+func newOption(tag string) *option {
 	tags := strings.Split(tag, ",")
-	opt := &option{}
+	opt := optionPool.Get().(*option)
 	for _, tag := range tags {
 		if tag == "datetime" {
 			opt.isDatetime = true
@@ -32,6 +44,13 @@ func genOption(tag string) *option {
 		}
 	}
 	return opt
+}
+
+func resetOption(opt *option) {
+	if opt != nil {
+		opt.reset()
+		optionPool.Put(opt)
+	}
 }
 
 func encodeDatetime(v reflect.Value) (interface{}, error) {
@@ -50,6 +69,13 @@ func encodeDatetime(v reflect.Value) (interface{}, error) {
 	return v.Interface(), nil
 }
 
-//func decodeDatetime(v string, opt *option) (reflect.Value, error) {
-//
-//}
+func decodeDatetime(v string, opt *option) (time.Time, error) {
+	if opt != nil && opt.isDatetime {
+		return time.ParseInLocation(timeFormat, v, time.Local)
+	}
+	now := time.Now()
+	if err := now.UnmarshalText([]byte(v)); err != nil {
+		return now, err
+	}
+	return now, nil
+}

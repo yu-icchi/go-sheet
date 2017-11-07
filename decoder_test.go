@@ -1,6 +1,7 @@
 package sheet
 
 import (
+	"fmt"
 	"github.com/k0kubun/pp"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ type SampleUnmarshalSub struct {
 
 func TestNewDecoder(t *testing.T) {
 	formats := [][]string{
-		{"ID", "Sub", "", "Num", "PID", "List", "SList", "", "", "Now"},
+		{"ID", "Sub", "", "Num", "PID", "List", "SList", "", "", "Now:datetime"},
 		{"", "Code", "Num", "", "", "", "_index", "Code", "Num"},
 	}
 	values := [][]string{
@@ -31,6 +32,29 @@ func TestNewDecoder(t *testing.T) {
 		{"", "", "", "", "", "BB", "2", "code_1_02", ""},
 	}
 	sample := &SampleUnmarshal{}
-	NewDecoder(formats).Decode(values, sample)
+	err := NewDecoder(formats).Decode(values, sample)
+	fmt.Println(err)
 	pp.Println(sample)
 }
+
+func BenchmarkNewDecoder(b *testing.B) {
+	formats := [][]string{
+		{"ID", "Sub", "", "Num", "PID", "List", "SList", "", "", "Now:datetime"},
+		{"", "Code", "Num", "", "", "", "_index", "Code", "Num"},
+	}
+	values := [][]string{
+		{"id_01", "code_01", "1100", "1", "p_id_01", "AA", "1", "", "", "2017-11-06 01:27:00"},
+		{"", "", "", "", "", "BB", "2", "code_1_02", ""},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sample := &SampleUnmarshal{}
+		NewDecoder(formats).Decode(values, sample)
+	}
+}
+
+// 200000	      6285 ns/op	    1800 B/op	      62 allocs/op
+// 200000	      5350 ns/op	    1560 B/op	      49 allocs/op
+// 300000	      4733 ns/op	    1256 B/op	      41 allocs/op
