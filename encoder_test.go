@@ -14,11 +14,11 @@ type SampleMarshal struct {
 	Time      time.Time `sheet:"datetime"`
 	List      []string
 	UInt      uint
-	Item      SampleItem
+	Item      *SampleItem
 	Bool      bool
 	Hoges     []SampleHoge
 	Hoge      SampleHoge
-	Float     float64
+	Float     float32
 	PList     []*string
 	CreatedAt int64 `sheet:"datetime"`
 }
@@ -55,14 +55,14 @@ func TestNewEncoder(t *testing.T) {
 		Time: time.Now(),
 		List: []string{"A", "B"},
 		UInt: 90,
-		Item: SampleItem{
-			Code:    "code_01",
-			GraphID: 1000,
-			Hoge: SampleHoge{
-				Title: "title_01",
-				Order: 1,
-			},
-		},
+		//Item: &SampleItem{
+		//	Code:    "code_01",
+		//	GraphID: 1000,
+		//	Hoge: SampleHoge{
+		//		Title: "title_01",
+		//		Order: 1,
+		//	},
+		//},
 		Bool: true,
 		Hoges: []SampleHoge{
 			{
@@ -102,7 +102,7 @@ func BenchmarkNewEncoder(b *testing.B) {
 		Time: time.Now(),
 		List: []string{"A", "B"},
 		UInt: 90,
-		Item: SampleItem{
+		Item: &SampleItem{
 			Code:    "code_01",
 			GraphID: 1000,
 			Hoge: SampleHoge{

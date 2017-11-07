@@ -36,7 +36,7 @@ func newOption(tag string) *option {
 		if tag == "datetime" {
 			opt.isDatetime = true
 		}
-		if strings.HasPrefix(tag, "title") {
+		if strings.HasPrefix(tag, "title=") {
 			tmp := strings.Split(tag, "=")
 			if len(tmp) > 1 {
 				opt.title = tmp[1]
