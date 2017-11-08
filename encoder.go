@@ -15,7 +15,7 @@ var cellsPool = sync.Pool{
 	},
 }
 
-func newCellPool() *cells {
+func getCellPool() *cells {
 	return cellsPool.Get().(*cells)
 }
 
@@ -56,7 +56,7 @@ func NewEncoder() *Encoder {
 }
 
 func (enc *Encoder) init() {
-	enc.cells = newCellPool()
+	enc.cells = getCellPool()
 	enc.maxColumn = 0
 	enc.maxRow = 0
 }

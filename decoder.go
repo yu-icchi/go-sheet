@@ -5,7 +5,37 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 )
+
+var rowsPool = sync.Pool{
+	New: func() interface{} {
+		return &rows{
+			list: make([]int, 0, 10),
+		}
+	},
+}
+
+func getRowsPool() *rows {
+	return rowsPool.Get().(*rows)
+}
+
+func resetRowsPool(rows *rows) {
+	rows.truncate()
+	rowsPool.Put(rows)
+}
+
+type rows struct {
+	list []int
+}
+
+func (r *rows) add(idx int) {
+	r.list = append(r.list, idx)
+}
+
+func (r *rows) truncate() {
+	r.list = r.list[:0]
+}
 
 type Decoder struct {
 	formats [][]string
@@ -45,7 +75,6 @@ func (dec *Decoder) Decode(values [][]string, v interface{}) error {
 		return errors.New("invalid decode error")
 	}
 
-	rv = rv.Elem()
 	row := 0
 	for column := range dec.formats[row] {
 		key := dec.formats[row][column]
@@ -61,7 +90,7 @@ func (dec *Decoder) Decode(values [][]string, v interface{}) error {
 		if keyIdx > 0 {
 			key = key[:keyIdx]
 		}
-		value := rv.FieldByName(key)
+		value := rv.Elem().FieldByName(key)
 		if value.IsValid() {
 			dec.decode(value, row, column, opt)
 		}
@@ -94,26 +123,68 @@ func (dec *Decoder) decode(v reflect.Value, row, column int, opt *option) error 
 			}
 		}
 	case reflect.Array:
-		return errors.New("unsupported decode array")
+		switch v.Index(0).Kind() {
+		case reflect.Ptr:
+			pType := reflect.New(v.Index(0).Type().Elem())
+			switch pType.Elem().Kind() {
+			case reflect.Struct:
+				rows := dec.targetRows(row, column)
+				for _, i := range rows.list {
+					elem := reflect.New(pType.Type().Elem())
+					if err := dec.decodeStruct(elem.Elem(), row, column, i); err != nil {
+						return err
+					}
+					v.Index(i).Set(elem)
+				}
+				resetRowsPool(rows)
+			default:
+				for i := 0; i < v.Len(); i++ {
+					x := dec.getValue(row+i, column)
+					elem := reflect.New(v.Index(i).Type().Elem())
+					if err := dec.set(elem.Elem(), x, opt); err != nil {
+						return err
+					}
+					v.Index(i).Set(elem)
+				}
+			}
+		case reflect.Struct:
+			rows := dec.targetRows(row, column)
+			for _, i := range rows.list {
+				if err := dec.decodeStruct(v.Index(i), row, column, i); err != nil {
+					return err
+				}
+			}
+			resetRowsPool(rows)
+		default:
+			for i := 0; i < v.Len(); i++ {
+				x := dec.getValue(row+i, column)
+				if err := dec.set(v.Index(i), x, opt); err != nil {
+					return err
+				}
+			}
+		}
 	case reflect.Slice:
 		elems := reflect.MakeSlice(v.Type(), 0, 1) // 最終的に蓄積するスライス
 		rv := reflect.MakeSlice(v.Type(), 1, 1).Index(0)
 		switch rv.Kind() {
 		case reflect.Ptr:
-			pType := reflect.New(rv.Type().Elem())
-			switch pType.Elem().Kind() {
+			switch rv.Type().Elem().Kind() {
 			case reflect.Struct:
 				rows := dec.targetRows(row, column)
-				for _, i := range rows {
+				for _, i := range rows.list {
 					elem := reflect.New(rv.Type().Elem())
 					if err := dec.decodeStruct(elem.Elem(), row, column, i); err != nil {
 						return err
 					}
 					elems = reflect.Append(elems, elem)
 				}
+				resetRowsPool(rows)
 			default:
 				for i := 0; i < len(dec.values); i++ {
 					x := dec.getValue(row+i, column)
+					if x == "" {
+						continue
+					}
 					elem := reflect.New(rv.Type().Elem())
 					if err := dec.set(elem.Elem(), x, opt); err != nil {
 						return err
@@ -123,16 +194,20 @@ func (dec *Decoder) decode(v reflect.Value, row, column int, opt *option) error 
 			}
 		case reflect.Struct:
 			rows := dec.targetRows(row, column)
-			for _, i := range rows {
+			for _, i := range rows.list {
 				elem := reflect.New(rv.Type()).Elem()
 				if err := dec.decodeStruct(elem, row, column, i); err != nil {
 					return err
 				}
 				elems = reflect.Append(elems, elem)
 			}
+			resetRowsPool(rows)
 		default:
 			for i := 0; i < len(dec.values); i++ {
 				x := dec.getValue(row+i, column)
+				if x == "" {
+					continue
+				}
 				elem := reflect.New(rv.Type()).Elem()
 				if err := dec.set(elem, x, opt); err != nil {
 					return err
@@ -183,11 +258,11 @@ func (dec *Decoder) decodeStruct(v reflect.Value, row, column, idx int) error {
 	return nil
 }
 
-func (dec *Decoder) targetRows(row, column int) []int {
-	rows := make([]int, 0, len(dec.values))
+func (dec *Decoder) targetRows(row, column int) *rows {
+	rows := getRowsPool()
 	for i := 0; i < len(dec.values); i++ {
 		if x := dec.getValue(row+i, column); x != "" {
-			rows = append(rows, i)
+			rows.add(i)
 		}
 	}
 	return rows
