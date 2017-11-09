@@ -29,14 +29,14 @@ var optionPool = sync.Pool{
 	},
 }
 
-func newOption(tag string) *option {
+func newOption(tag string, isTitle bool) *option {
 	tags := strings.Split(tag, ",")
 	opt := optionPool.Get().(*option)
 	for _, tag := range tags {
 		if tag == "datetime" {
 			opt.isDatetime = true
 		}
-		if strings.HasPrefix(tag, "title=") {
+		if isTitle && strings.HasPrefix(tag, "title=") {
 			tmp := strings.Split(tag, "=")
 			if len(tmp) > 1 {
 				opt.title = tmp[1]
@@ -54,15 +54,17 @@ func resetOption(opt *option) {
 }
 
 func encodeDatetime(v reflect.Value) (interface{}, error) {
-	switch n := v.Interface().(type) {
-	case time.Time:
-		if n.IsZero() {
+	if v.Type() == typeOfTime {
+		t := v.Interface().(time.Time)
+		if t.IsZero() {
 			return nil, nil
 		}
-		return n.Format(timeFormat), nil
-	case int64:
-		if n > 0 {
-			return time.Unix(n, 0).Format(timeFormat), nil
+		return t.Format(timeFormat), nil
+	}
+	if v.Kind() == reflect.Int64 {
+		t := v.Int()
+		if t > 0 {
+			return time.Unix(t, 0).Format(timeFormat), nil
 		}
 		return nil, nil
 	}

@@ -96,7 +96,7 @@ func (enc *Encoder) reflectStruct(v reflect.Value, column, row int, isNil bool) 
 		if tag == "-" {
 			continue
 		}
-		opt := newOption(tag)
+		opt := newOption(tag, false)
 		addNum, err := enc.reflectValue(v.Field(i), column+n, row, opt, isNil)
 		if err != nil {
 			return 0, err
@@ -167,8 +167,7 @@ func (enc *Encoder) reflectValue(v reflect.Value, column, row int, opt *option, 
 			return n, nil
 		}
 	case reflect.Array:
-		rv := reflect.New(v.Type()).Elem().Index(0)
-		isStruct := rv.Kind() == reflect.Struct
+		isStruct := v.Type().Elem().Kind() == reflect.Struct
 		col, err := enc.reflectList(v, isStruct, column, opt, isNil)
 		if err != nil {
 			return 0, err
@@ -190,10 +189,10 @@ func (enc *Encoder) reflectValue(v reflect.Value, column, row int, opt *option, 
 		} else {
 			n := 0
 			if isStruct {
-				enc.add(0, column, row)
+				enc.add(nil, column, row)
 				n = 1
 			}
-			n, err := enc.reflectValue(rv, column+n, row, opt, isNil)
+			n, err := enc.reflectValue(rv, column+n, row, opt, true)
 			if err != nil {
 				return 0, err
 			}

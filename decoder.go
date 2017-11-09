@@ -75,6 +75,7 @@ func (dec *Decoder) Decode(values [][]string, v interface{}) error {
 		return errors.New("invalid decode error")
 	}
 
+	rv = rv.Elem()
 	row := 0
 	for column := range dec.formats[row] {
 		key := dec.formats[row][column]
@@ -85,14 +86,17 @@ func (dec *Decoder) Decode(values [][]string, v interface{}) error {
 		var opt *option
 		if keyIdx > 0 && keyIdx+1 < len(key) {
 			// option
-			opt = newOption(key[keyIdx+1:])
+			opt = newOption(key[keyIdx+1:], false)
 		}
 		if keyIdx > 0 {
 			key = key[:keyIdx]
 		}
-		value := rv.Elem().FieldByName(key)
-		if value.IsValid() {
-			dec.decode(value, row, column, opt)
+		field, ok := rv.Type().FieldByName(key)
+		if ok && field.Tag.Get(tagName) != "-" {
+			value := rv.FieldByName(key)
+			if value.IsValid() {
+				dec.decode(value, row, column, opt)
+			}
 		}
 		resetOption(opt)
 	}
@@ -102,12 +106,33 @@ func (dec *Decoder) Decode(values [][]string, v interface{}) error {
 func (dec *Decoder) decode(v reflect.Value, row, column int, opt *option) error {
 	switch v.Kind() {
 	case reflect.Ptr:
-		// todo...nilの場合はどうするかな。。。
 		elem := reflect.New(v.Type().Elem())
-		if err := dec.decode(elem.Elem(), row, column, opt); err != nil {
-			return err
+		switch elem.Elem().Kind() {
+		case reflect.Struct:
+			isExist := false
+			for i, format := range dec.formats[row+1][column:] {
+				if format == "" {
+					break
+				}
+				if x := dec.getValue(row, column+i); x != "" {
+					isExist = true
+					break
+				}
+			}
+			if isExist {
+				if err := dec.decode(elem.Elem(), row, column, opt); err != nil {
+					return err
+				}
+				v.Set(elem)
+			}
+		default:
+			if x := dec.getValue(row, column); x != "" {
+				if err := dec.decode(elem.Elem(), row, column, opt); err != nil {
+					return err
+				}
+				v.Set(elem)
+			}
 		}
-		v.Set(elem)
 	case reflect.Struct:
 		switch v.Type() {
 		case typeOfTime:
@@ -129,7 +154,26 @@ func (dec *Decoder) decode(v reflect.Value, row, column int, opt *option) error 
 			switch pType.Elem().Kind() {
 			case reflect.Struct:
 				rows := dec.targetRows(row, column)
-				for _, i := range rows.list {
+				for idx, i := range rows.list {
+					if idx >= v.Len() {
+						break
+					}
+					isExist := false
+					for j, format := range dec.formats[row+1][column:] {
+						if format == "" {
+							break
+						}
+						if format == "_index" {
+							continue
+						}
+						if x := dec.getValue(row+i, column+j); x != "" {
+							isExist = true
+							break
+						}
+					}
+					if !isExist {
+						continue
+					}
 					elem := reflect.New(pType.Type().Elem())
 					if err := dec.decodeStruct(elem.Elem(), row, column, i); err != nil {
 						return err
@@ -140,6 +184,9 @@ func (dec *Decoder) decode(v reflect.Value, row, column int, opt *option) error 
 			default:
 				for i := 0; i < v.Len(); i++ {
 					x := dec.getValue(row+i, column)
+					if x == "" {
+						continue
+					}
 					elem := reflect.New(v.Index(i).Type().Elem())
 					if err := dec.set(elem.Elem(), x, opt); err != nil {
 						return err
@@ -172,17 +219,35 @@ func (dec *Decoder) decode(v reflect.Value, row, column int, opt *option) error 
 			case reflect.Struct:
 				rows := dec.targetRows(row, column)
 				for _, i := range rows.list {
-					elem := reflect.New(rv.Type().Elem())
-					if err := dec.decodeStruct(elem.Elem(), row, column, i); err != nil {
-						return err
+					isExist := false
+					for j, format := range dec.formats[row+1][column:] {
+						if format == "" {
+							break
+						}
+						if format == "_index" {
+							continue
+						}
+						if x := dec.getValue(row+i, column+j); x != "" {
+							isExist = true
+							break
+						}
 					}
-					elems = reflect.Append(elems, elem)
+					if isExist {
+						elem := reflect.New(rv.Type().Elem())
+						if err := dec.decodeStruct(elem.Elem(), row, column, i); err != nil {
+							return err
+						}
+						elems = reflect.Append(elems, elem)
+					} else {
+						elems = reflect.Append(elems, rv)
+					}
 				}
 				resetRowsPool(rows)
 			default:
 				for i := 0; i < len(dec.values); i++ {
 					x := dec.getValue(row+i, column)
 					if x == "" {
+						elems = reflect.Append(elems, rv)
 						continue
 					}
 					elem := reflect.New(rv.Type().Elem())
@@ -241,17 +306,20 @@ func (dec *Decoder) decodeStruct(v reflect.Value, row, column, idx int) error {
 		var opt *option
 		if keyIdx > 0 && keyIdx+1 < len(key) {
 			// option
-			opt = newOption(key[keyIdx+1:])
+			opt = newOption(key[keyIdx+1:], false)
 		}
 		if keyIdx > 0 {
 			key = key[:keyIdx]
 		}
-		elem := v.FieldByName(key)
-		if !elem.IsValid() {
-			continue
-		}
-		if err := dec.decode(elem, row+idx, column+i, opt); err != nil {
-			return err
+		field, ok := v.Type().FieldByName(key)
+		if ok && field.Tag.Get(tagName) != "-" {
+			elem := v.FieldByName(key)
+			if !elem.IsValid() {
+				continue
+			}
+			if err := dec.decode(elem, row+idx, column+i, opt); err != nil {
+				return err
+			}
 		}
 		resetOption(opt)
 	}

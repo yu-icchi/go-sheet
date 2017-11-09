@@ -44,7 +44,7 @@ func (enc *HeaderEncoder) encode(v reflect.Value) {
 			continue
 		}
 		key := field.Name
-		opt := newOption(tag)
+		opt := newOption(tag, true)
 		if opt.isDatetime {
 			key += ":datetime"
 		}
