@@ -33,6 +33,10 @@ func (r *rows) add(idx int) {
 	r.list = append(r.list, idx)
 }
 
+func (r *rows) length() int {
+	return len(r.list)
+}
+
 func (r *rows) truncate() {
 	r.list = r.list[:0]
 }
@@ -244,18 +248,23 @@ func (dec *Decoder) decode(v reflect.Value, row, column int, opt *option) error 
 				}
 				resetRowsPool(rows)
 			default:
-				for i := 0; i < len(dec.values); i++ {
-					x := dec.getValue(row+i, column)
-					if x == "" {
-						elems = reflect.Append(elems, rv)
-						continue
+				rows := dec.targetRows(row, column)
+				if rows.length() != 0 {
+					size := rows.list[rows.length()-1]
+					for i := 0; i <= size; i++ {
+						x := dec.getValue(row+i, column)
+						if x == "" {
+							elems = reflect.Append(elems, rv)
+							continue
+						}
+						elem := reflect.New(rv.Type().Elem())
+						if err := dec.set(elem.Elem(), x, opt); err != nil {
+							return err
+						}
+						elems = reflect.Append(elems, elem)
 					}
-					elem := reflect.New(rv.Type().Elem())
-					if err := dec.set(elem.Elem(), x, opt); err != nil {
-						return err
-					}
-					elems = reflect.Append(elems, elem)
 				}
+				resetRowsPool(rows)
 			}
 		case reflect.Struct:
 			rows := dec.targetRows(row, column)
