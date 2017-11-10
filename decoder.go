@@ -277,17 +277,19 @@ func (dec *Decoder) decode(v reflect.Value, row, column int, opt *option) error 
 			}
 			resetRowsPool(rows)
 		default:
-			for i := 0; i < len(dec.values); i++ {
-				x := dec.getValue(row+i, column)
-				if x == "" {
-					continue
+			rows := dec.targetRows(row, column)
+			if rows.length() != 0 {
+				size := rows.list[rows.length()-1]
+				for i := 0; i <= size; i++ {
+					x := dec.getValue(row+i, column)
+					elem := reflect.New(rv.Type()).Elem()
+					if err := dec.set(elem, x, opt); err != nil {
+						return err
+					}
+					elems = reflect.Append(elems, elem)
 				}
-				elem := reflect.New(rv.Type()).Elem()
-				if err := dec.set(elem, x, opt); err != nil {
-					return err
-				}
-				elems = reflect.Append(elems, elem)
 			}
+			resetRowsPool(rows)
 		}
 		v.Set(elems)
 	default:
