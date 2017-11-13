@@ -248,23 +248,33 @@ func (dec *decoder) decode(v reflect.Value, row, column int, opt *option) error 
 				}
 				resetRowsPool(rows)
 			default:
-				rows := dec.targetRows(row, column)
-				if rows.length() != 0 {
-					size := rows.list[rows.length()-1]
-					for i := 0; i <= size; i++ {
-						x := dec.getValue(row+i, column)
-						if x == "" {
-							elems = reflect.Append(elems, rv)
-							continue
-						}
+				if opt != nil && opt.isCSV {
+					for _, x := range strings.Split(dec.getValue(row, column), ",") {
 						elem := reflect.New(rv.Type().Elem())
 						if err := dec.set(elem.Elem(), x, opt); err != nil {
 							return err
 						}
 						elems = reflect.Append(elems, elem)
 					}
+				} else {
+					rows := dec.targetRows(row, column)
+					if rows.length() != 0 {
+						size := rows.list[rows.length()-1]
+						for i := 0; i <= size; i++ {
+							x := dec.getValue(row+i, column)
+							if x == "" {
+								elems = reflect.Append(elems, rv)
+								continue
+							}
+							elem := reflect.New(rv.Type().Elem())
+							if err := dec.set(elem.Elem(), x, opt); err != nil {
+								return err
+							}
+							elems = reflect.Append(elems, elem)
+						}
+					}
+					resetRowsPool(rows)
 				}
-				resetRowsPool(rows)
 			}
 		case reflect.Struct:
 			rows := dec.targetRows(row, column)
@@ -277,19 +287,29 @@ func (dec *decoder) decode(v reflect.Value, row, column int, opt *option) error 
 			}
 			resetRowsPool(rows)
 		default:
-			rows := dec.targetRows(row, column)
-			if rows.length() != 0 {
-				size := rows.list[rows.length()-1]
-				for i := 0; i <= size; i++ {
-					x := dec.getValue(row+i, column)
+			if opt != nil && opt.isCSV {
+				for _, x := range strings.Split(dec.getValue(row, column), ",") {
 					elem := reflect.New(rv.Type()).Elem()
 					if err := dec.set(elem, x, opt); err != nil {
 						return err
 					}
 					elems = reflect.Append(elems, elem)
 				}
+			} else {
+				rows := dec.targetRows(row, column)
+				if rows.length() != 0 {
+					size := rows.list[rows.length()-1]
+					for i := 0; i <= size; i++ {
+						x := dec.getValue(row+i, column)
+						elem := reflect.New(rv.Type()).Elem()
+						if err := dec.set(elem, x, opt); err != nil {
+							return err
+						}
+						elems = reflect.Append(elems, elem)
+					}
+				}
+				resetRowsPool(rows)
 			}
-			resetRowsPool(rows)
 		}
 		v.Set(elems)
 	default:
