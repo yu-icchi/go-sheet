@@ -2,9 +2,10 @@ package sheet
 
 import (
 	"fmt"
-	"github.com/k0kubun/pp"
 	"testing"
 	"time"
+
+	"github.com/k0kubun/pp"
 )
 
 type SampleMarshal struct {
@@ -12,7 +13,7 @@ type SampleMarshal struct {
 	Num       int
 	PID       *string
 	Time      time.Time `sheet:"datetime,title=time"`
-	List      []string
+	List      []string  `sheet:"csv"`
 	UInt      uint
 	Item      *SampleItem
 	Bool      bool
@@ -20,13 +21,15 @@ type SampleMarshal struct {
 	Hoge      SampleHoge
 	Float     float32
 	PList     []*string
-	CreatedAt int64 `sheet:"datetime"`
+	CreatedAt int64     `sheet:"datetime"`
+	Floats    []float32 `sheet:"csv"`
 }
 
 type SampleItem struct {
 	Code    string
 	GraphID int
 	Hoge    SampleHoge
+	Slice   SampleSlicePtr
 }
 
 type SampleHoge struct {
@@ -35,7 +38,7 @@ type SampleHoge struct {
 }
 
 type SampleSlicePtr struct {
-	List []*string
+	List []string `sheet:"csv"`
 }
 
 type SampleArrayPtr struct {
@@ -55,14 +58,17 @@ func TestNewEncoder(t *testing.T) {
 		Time: time.Now(),
 		List: []string{"A", "B"},
 		UInt: 90,
-		//Item: &SampleItem{
-		//	Code:    "code_01",
-		//	GraphID: 1000,
-		//	Hoge: SampleHoge{
-		//		Title: "title_01",
-		//		Order: 1,
-		//	},
-		//},
+		Item: &SampleItem{
+			Code:    "code_01",
+			GraphID: 1000,
+			Hoge: SampleHoge{
+				Title: "title_01",
+				Order: 1,
+			},
+			Slice: SampleSlicePtr{
+				List: []string{"AA", "BB", "CC"},
+			},
+		},
 		Bool: true,
 		Hoges: []SampleHoge{
 			{
@@ -85,8 +91,9 @@ func TestNewEncoder(t *testing.T) {
 		Float:     3.1415,
 		PList:     []*string{&pA, &pB},
 		CreatedAt: time.Now().Unix(),
+		Floats:    []float32{1.1002, 2.21, 3.32, 5.67},
 	}
-	values, err := NewEncoder().Encode(sample)
+	values, err := newEncoder().Encode(sample)
 	fmt.Println(err)
 	pp.Println(values)
 }
@@ -129,14 +136,15 @@ func BenchmarkNewEncoder(b *testing.B) {
 			Title: "title_02",
 			Order: 2,
 		},
-		Float: 3.1415,
-		PList: []*string{&pA, &pB},
+		Float:  3.1415,
+		PList:  []*string{&pA, &pB},
+		Floats: []float32{1.1002, 2.21, 3.32, 5.67},
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := NewEncoder().Encode(sample)
+		_, err := newEncoder().Encode(sample)
 		if err != nil {
 			b.Error(err)
 			b.FailNow()
@@ -144,11 +152,7 @@ func BenchmarkNewEncoder(b *testing.B) {
 	}
 }
 
-// 100000	     14261 ns/op	    5120 B/op	     125 allocs/op
-// 200000	      9532 ns/op	    4288 B/op	      99 allocs/op
-// 200000	      8230 ns/op	    2272 B/op	      93 allocs/op
-// 200000	      8491 ns/op	    2264 B/op	      92 allocs/op
+// 200000	      8682 ns/op	    2129 B/op	      86 allocs/op
 
-// array
-// 200000	      8382 ns/op	    2273 B/op	      91 allocs/op
-// 200000	      8102 ns/op	    2160 B/op	      89 allocs/op
+// 200000	      7388 ns/op	    1648 B/op	      70 allocs/op
+// 200000	      7567 ns/op	    1616 B/op	      69 allocs/op

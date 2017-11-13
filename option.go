@@ -16,11 +16,17 @@ type option struct {
 	title string
 	// isDatetime int64形式の数字をDatetime形式(2006-01-02 15:04:05)に変換するか否か
 	isDatetime bool
+	// isIndex decode時に基準となるインテックスオプション
+	isIndex bool
+	// isCSV csvオプション、Array or Slice以外では無効
+	isCSV bool
 }
 
 func (o *option) reset() {
 	o.title = ""
 	o.isDatetime = false
+	o.isIndex = false
+	o.isCSV = false
 }
 
 var optionPool = sync.Pool{
@@ -35,6 +41,12 @@ func newOption(tag string, isTitle bool) *option {
 	for _, tag := range tags {
 		if tag == "datetime" {
 			opt.isDatetime = true
+		}
+		if tag == "index" {
+			opt.isIndex = true
+		}
+		if tag == "csv" {
+			opt.isCSV = true
 		}
 		if isTitle && strings.HasPrefix(tag, "title=") {
 			tmp := strings.Split(tag, "=")
@@ -63,10 +75,10 @@ func encodeDatetime(v reflect.Value) (interface{}, error) {
 	}
 	if v.Kind() == reflect.Int64 {
 		t := v.Int()
-		if t > 0 {
-			return time.Unix(t, 0).Format(timeFormat), nil
+		if t <= 0 {
+			return nil, nil
 		}
-		return nil, nil
+		return time.Unix(t, 0).Format(timeFormat), nil
 	}
 	return v.Interface(), nil
 }

@@ -41,18 +41,18 @@ func (r *rows) truncate() {
 	r.list = r.list[:0]
 }
 
-type Decoder struct {
+type decoder struct {
 	formats [][]string
 	values  [][]string
 }
 
-func NewDecoder(formats [][]string) *Decoder {
-	dec := &Decoder{}
+func newDecoder(formats [][]string) *decoder {
+	dec := &decoder{}
 	dec.setFormat(formats)
 	return dec
 }
 
-func (dec *Decoder) setFormat(formats [][]string) {
+func (dec *decoder) setFormat(formats [][]string) {
 	maxColumn := 0
 	for i := range formats {
 		if maxColumn < len(formats[i]) {
@@ -71,7 +71,7 @@ func (dec *Decoder) setFormat(formats [][]string) {
 	dec.formats = ret
 }
 
-func (dec *Decoder) Decode(values [][]string, v interface{}) error {
+func (dec *decoder) Decode(values [][]string, v interface{}) error {
 	dec.values = values
 
 	rv := reflect.ValueOf(v)
@@ -107,7 +107,7 @@ func (dec *Decoder) Decode(values [][]string, v interface{}) error {
 	return nil
 }
 
-func (dec *Decoder) decode(v reflect.Value, row, column int, opt *option) error {
+func (dec *decoder) decode(v reflect.Value, row, column int, opt *option) error {
 	switch v.Kind() {
 	case reflect.Ptr:
 		elem := reflect.New(v.Type().Elem())
@@ -301,7 +301,7 @@ func (dec *Decoder) decode(v reflect.Value, row, column int, opt *option) error 
 	return nil
 }
 
-func (dec *Decoder) decodeStruct(v reflect.Value, row, column, idx int) error {
+func (dec *decoder) decodeStruct(v reflect.Value, row, column, idx int) error {
 	l := 1
 	for _, format := range dec.formats[row][column+1:] {
 		if format != "" {
@@ -337,7 +337,7 @@ func (dec *Decoder) decodeStruct(v reflect.Value, row, column, idx int) error {
 	return nil
 }
 
-func (dec *Decoder) targetRows(row, column int) *rows {
+func (dec *decoder) targetRows(row, column int) *rows {
 	rows := getRowsPool()
 	for i := 0; i < len(dec.values); i++ {
 		if x := dec.getValue(row+i, column); x != "" {
@@ -347,14 +347,14 @@ func (dec *Decoder) targetRows(row, column int) *rows {
 	return rows
 }
 
-func (dec *Decoder) getValue(row, column int) string {
+func (dec *decoder) getValue(row, column int) string {
 	if row < len(dec.values) && column < len(dec.values[row]) {
 		return dec.values[row][column]
 	}
 	return ""
 }
 
-func (dec *Decoder) set(v reflect.Value, value string, opt *option) error {
+func (dec *decoder) set(v reflect.Value, value string, opt *option) error {
 	if value == "" {
 		return nil
 	}

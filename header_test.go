@@ -9,5 +9,5 @@ type SampleHeader struct {
 
 func TestNewHeaderEncoder(t *testing.T) {
 	sample := &SampleHeader{}
-	NewHeaderEncoder().Encode(sample)
+	newHeaderEncoder().Encode(sample)
 }

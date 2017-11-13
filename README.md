@@ -2,7 +2,7 @@
 
 ```
 type Sample struct {
-  Name  string   `sheet:"name"`
+  Name  string   `sheet:"name,index"`
   Num   int      `sheet:"num"`
   Term  Term     `sheet:"term"`
   IDs   []int    `sheet:"ids,csv"`

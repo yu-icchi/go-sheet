@@ -14,13 +14,13 @@ var (
 )
 
 func Marshal(v interface{}) ([][]interface{}, error) {
-	return NewEncoder().Encode(v)
+	return newEncoder().Encode(v)
 }
 
 func Unmarshal(formats [][]string, values [][]string, v interface{}) error {
-	return NewDecoder(formats).Decode(values, v)
+	return newDecoder(formats).Decode(values, v)
 }
 
 func Header(v interface{}) {
-	NewHeaderEncoder().Encode(v)
+	newHeaderEncoder().Encode(v)
 }

@@ -13,17 +13,17 @@ type headerCell struct {
 	title  string
 }
 
-type HeaderEncoder struct {
+type headerEncoder struct {
 	cells []headerCell
 }
 
-func NewHeaderEncoder() *HeaderEncoder {
-	return &HeaderEncoder{
+func newHeaderEncoder() *headerEncoder {
+	return &headerEncoder{
 		cells: []headerCell{},
 	}
 }
 
-func (enc *HeaderEncoder) Encode(v interface{}) {
+func (enc *headerEncoder) Encode(v interface{}) {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Ptr && !rv.IsNil() {
 		rv = rv.Elem()
@@ -32,7 +32,7 @@ func (enc *HeaderEncoder) Encode(v interface{}) {
 	enc.encode(rv)
 }
 
-func (enc *HeaderEncoder) encode(v reflect.Value) {
+func (enc *headerEncoder) encode(v reflect.Value) {
 	n := 0
 	for i := 0; i < v.Type().NumField(); i++ {
 		field := v.Type().Field(i)
@@ -53,6 +53,6 @@ func (enc *HeaderEncoder) encode(v reflect.Value) {
 	}
 }
 
-func (enc *HeaderEncoder) add(v reflect.Value, column, row int) {
+func (enc *headerEncoder) add(v reflect.Value, column, row int) {
 	enc.cells = append(enc.cells, headerCell{})
 }
