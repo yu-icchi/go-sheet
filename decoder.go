@@ -285,10 +285,9 @@ func (dec *decoder) decode(v reflect.Value, row, column int, opt *option) error 
 		}
 	case reflect.Slice:
 		elems := reflect.MakeSlice(v.Type(), 0, 1) // 最終的に蓄積するスライス
-		rv := reflect.MakeSlice(v.Type(), 1, 1).Index(0)
-		switch rv.Kind() {
+		switch v.Type().Elem().Kind() {
 		case reflect.Ptr:
-			switch rv.Type().Elem().Kind() {
+			switch v.Type().Elem().Elem().Kind() {
 			case reflect.Struct:
 				rows := dec.targetRows(row, column)
 				for _, i := range rows.list {
@@ -306,20 +305,21 @@ func (dec *decoder) decode(v reflect.Value, row, column int, opt *option) error 
 						}
 					}
 					if isExist {
-						elem := reflect.New(rv.Type().Elem())
+						elem := reflect.New(v.Type().Elem().Elem())
 						if err := dec.decodeStruct(elem.Elem(), row, column, i); err != nil {
 							return err
 						}
 						elems = reflect.Append(elems, elem)
 					} else {
-						elems = reflect.Append(elems, rv)
+						// nil代入
+						elems = reflect.Append(elems, reflect.New(v.Type().Elem()).Elem())
 					}
 				}
 				resetRowsPool(rows)
 			default:
 				if opt != nil && opt.isCSV {
 					for _, x := range strings.Split(dec.getValue(row, column), ",") {
-						elem := reflect.New(rv.Type().Elem())
+						elem := reflect.New(v.Type().Elem().Elem())
 						if err := dec.set(elem.Elem(), x, opt); err != nil {
 							return err
 						}
@@ -331,11 +331,11 @@ func (dec *decoder) decode(v reflect.Value, row, column int, opt *option) error 
 						size := rows.list[rows.length()-1]
 						for i := 0; i <= size; i++ {
 							x := dec.getValue(row+i, column)
+							elem := reflect.New(v.Type().Elem().Elem())
 							if x == "" {
-								elems = reflect.Append(elems, rv)
+								elems = reflect.Append(elems, reflect.New(v.Type().Elem()).Elem())
 								continue
 							}
-							elem := reflect.New(rv.Type().Elem())
 							if err := dec.set(elem.Elem(), x, opt); err != nil {
 								return err
 							}
@@ -348,7 +348,7 @@ func (dec *decoder) decode(v reflect.Value, row, column int, opt *option) error 
 		case reflect.Struct:
 			rows := dec.targetRows(row, column)
 			for _, i := range rows.list {
-				elem := reflect.New(rv.Type()).Elem()
+				elem := reflect.New(v.Type().Elem()).Elem()
 				if err := dec.decodeStruct(elem, row, column, i); err != nil {
 					return err
 				}
@@ -358,7 +358,7 @@ func (dec *decoder) decode(v reflect.Value, row, column int, opt *option) error 
 		default:
 			if opt != nil && opt.isCSV {
 				for _, x := range strings.Split(dec.getValue(row, column), ",") {
-					elem := reflect.New(rv.Type()).Elem()
+					elem := reflect.New(v.Type().Elem()).Elem()
 					if err := dec.set(elem, x, opt); err != nil {
 						return err
 					}
@@ -370,7 +370,7 @@ func (dec *decoder) decode(v reflect.Value, row, column int, opt *option) error 
 					size := rows.list[rows.length()-1]
 					for i := 0; i <= size; i++ {
 						x := dec.getValue(row+i, column)
-						elem := reflect.New(rv.Type()).Elem()
+						elem := reflect.New(v.Type().Elem()).Elem()
 						if err := dec.set(elem, x, opt); err != nil {
 							return err
 						}

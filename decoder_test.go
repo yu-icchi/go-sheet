@@ -35,7 +35,7 @@ func TestNewDecoder(t *testing.T) {
 	}
 	values := [][]string{
 		{"id_01", "aaa", "123456789", "123", "AA,BB,CC", "p-id", "AA", "1", "", "90", "2017-11-06 01:27:00"},
-		{"", "", "", "", "", "", "BB", "2", "code_1_02", "12"},
+		{"", "", "", "", "", "", "", "2", "", ""},
 		{"", "", "", "", "", "", "CC", "3", "code_1_03", "13"},
 	}
 	sample := &SampleUnmarshal{}
@@ -62,5 +62,4 @@ func BenchmarkNewDecoder(b *testing.B) {
 	}
 }
 
-// 200000	      7158 ns/op	    1312 B/op	      52 allocs/op
-// 100000	     13480 ns/op	    3249 B/op	      95 allocs/op
+// 100000	     14406 ns/op	    3369 B/op	      99 allocs/op
