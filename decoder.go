@@ -44,10 +44,13 @@ func (r *rows) truncate() {
 type decoder struct {
 	formats [][]string
 	values  [][]string
+	index   map[string]map[string]string
 }
 
 func newDecoder(formats [][]string) *decoder {
-	dec := &decoder{}
+	dec := &decoder{
+		index: map[string]map[string]string{},
+	}
 	dec.setFormat(formats)
 	return dec
 }
@@ -80,6 +83,8 @@ func (dec *decoder) Decode(values [][]string, v interface{}) error {
 	}
 
 	rv = rv.Elem()
+	dec.createIndex(rv)
+	name := rv.Type().String()
 	row := 0
 	for column := range dec.formats[row] {
 		key := dec.formats[row][column]
@@ -95,16 +100,80 @@ func (dec *decoder) Decode(values [][]string, v interface{}) error {
 		if keyIdx > 0 {
 			key = key[:keyIdx]
 		}
+		key = dec.getIndex(name, key)
 		field, ok := rv.Type().FieldByName(key)
 		if ok && field.Tag.Get(tagName) != "-" {
 			value := rv.FieldByName(key)
 			if value.IsValid() {
-				dec.decode(value, row, column, opt)
+				if err := dec.decode(value, row, column, opt); err != nil {
+					return err
+				}
 			}
 		}
 		resetOption(opt)
 	}
 	return nil
+}
+
+func (dec *decoder) getIndex(name, key string) string {
+	if _, ok := dec.index[name]; !ok {
+		return key
+	}
+	k, ok := dec.index[name][key]
+	if !ok {
+		return key
+	}
+	return k
+}
+
+func (dec *decoder) createIndex(v reflect.Value) {
+	name := v.Type().String()
+	if _, ok := dec.index[name]; !ok {
+		dec.index[name] = map[string]string{}
+	}
+
+	for i := 0; i < v.Type().NumField(); i++ {
+		field := v.Type().Field(i)
+		switch field.Type.Kind() {
+		case reflect.Ptr:
+			elem := reflect.New(v.Field(i).Type().Elem()).Elem()
+			if elem.Kind() == reflect.Struct {
+				dec.createIndex(elem)
+			}
+		case reflect.Struct:
+			if v.Field(i).Type() != typeOfTime {
+				dec.createIndex(v.Field(i))
+			}
+		case reflect.Array:
+			if v.Field(i).Type().Elem().Kind() == reflect.Ptr {
+				elem := reflect.New(v.Field(i).Type().Elem().Elem()).Elem()
+				if elem.Kind() == reflect.Struct {
+					dec.createIndex(elem)
+				}
+			}
+			if v.Field(i).Type().Elem().Kind() == reflect.Struct {
+				elem := reflect.New(v.Field(i).Type().Elem()).Elem()
+				dec.createIndex(elem)
+			}
+		case reflect.Slice:
+			if v.Field(i).Type().Elem().Kind() == reflect.Ptr {
+				elem := reflect.New(v.Field(i).Type().Elem().Elem()).Elem()
+				if elem.Kind() == reflect.Struct {
+					dec.createIndex(elem)
+				}
+			}
+			if v.Field(i).Type().Elem().Kind() == reflect.Struct {
+				elem := reflect.New(v.Field(i).Type().Elem()).Elem()
+				dec.createIndex(elem)
+			}
+		}
+		key := field.Name
+		tags := strings.Split(field.Tag.Get(tagName), ",")
+		if len(tags) > 0 {
+			key = tags[0]
+		}
+		dec.index[name][key] = field.Name
+	}
 }
 
 func (dec *decoder) decode(v reflect.Value, row, column int, opt *option) error {
@@ -329,6 +398,7 @@ func (dec *decoder) decodeStruct(v reflect.Value, row, column, idx int) error {
 		}
 		l++
 	}
+	name := v.Type().String()
 	for i, key := range dec.formats[row+1][column : column+l] {
 		if key == "" {
 			break
@@ -342,14 +412,14 @@ func (dec *decoder) decodeStruct(v reflect.Value, row, column, idx int) error {
 		if keyIdx > 0 {
 			key = key[:keyIdx]
 		}
+		key = dec.getIndex(name, key)
 		field, ok := v.Type().FieldByName(key)
 		if ok && field.Tag.Get(tagName) != "-" {
 			elem := v.FieldByName(key)
-			if !elem.IsValid() {
-				continue
-			}
-			if err := dec.decode(elem, row+idx, column+i, opt); err != nil {
-				return err
+			if elem.IsValid() {
+				if err := dec.decode(elem, row+idx, column+i, opt); err != nil {
+					return err
+				}
 			}
 		}
 		resetOption(opt)

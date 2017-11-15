@@ -14,6 +14,3 @@ type Term struct {
   End   int64 `sheet:"end,datetime"`
 }
 ```
-
-[{name, a}, {num, 9}, {term.start: 9}, {term.end:8}]
-
